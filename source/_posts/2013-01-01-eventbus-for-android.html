@@ -21,7 +21,7 @@ meta:
   _wp_jd_target: http://www.logv.ws/251
   _jd_wp_twitter: ! 'a:1:{i:0;s:50:"New post: EventBus for Android http://goo.gl/EUujQ";}'
 ---
-<p>The new version of trainmonitor adds some new features like syncing multiple devices. Which was one of the most challenging features to implement. The app uses a lot of threading to do nearly everything except UI drawing off the main thread. This required a lot of callbacks and it really started to get messy when the same action should be triggered from different sources. To illustrate some of the issues I had we can have a look at the start up of my app. To illustrate it I have drawn some state diagram: <img src="http://www.logv.ws/wp-content/uploads/2012/12/Events.png" alt="app startup" /></p>
+<p>The new version of trainmonitor adds some new features like syncing multiple devices. Which was one of the most challenging features to implement. The app uses a lot of threading to do nearly everything except UI drawing off the main thread. This required a lot of callbacks and it really started to get messy when the same action should be triggered from different sources. To illustrate some of the issues I had we can have a look at the start up of my app. To illustrate it I have drawn some state diagram: <img src="/files/Events.png" alt="app startup" /></p>
 
 <p>As you can see there are several way through the application. And here is a typical peace of code:</p>
 
