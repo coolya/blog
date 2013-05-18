@@ -1,0 +1,33 @@
+---
+layout: page
+title: logv.http
+tags: []
+status: publish
+type: page
+published: true
+meta:
+  _jd_tweet_this: 'yes'
+  _wp_page_template: default
+  _edit_last: '1'
+---
+<p>While I was working on the <a href="http://www.logv.ws/zugmonitor-app">trainmonitor</a> project I need a back-end server that could handle the HTTP API. The normal .Net way would be to use ASP.Net and do it with MVC, but since my back-end should run on Mono I don't wanted to go that painful road with Mono and decided to do some stuff on my own.</p>
+
+<p>That's when logv.http was born a simple webserver written in .Net. It is not fully written by my own it is mostly a wrapper around the HttpListener class in the framework but it takes away many of the annoying work from you with a simple API and does not have the large footprint like using ASP.</p>
+
+<p>Creating a "hello world" looks like this</p>
+
+<pre><code>var server = new Server("localhost", 13337);
+
+server.Get("http://localhost:13337" ,(req, res) =&gt; res.Write("Hello World!"));
+
+server.Start();
+</code></pre>
+
+<p>But the project contains many more stuff like, helpers for setting caching responding with JSON serialized objects. To do so simply replace the second line with:</p>
+
+<pre><code>server.Get("http://localhost:13337" ,(req, res) =&gt; res.WriteAsJson(new {Hello = "world"}));
+</code></pre>
+
+<p>And the server will response with a JSON string. There are also helpers for all kinds of error messages and other response codes, simply try it out!</p>
+
+<p>You can find the NuGet Package <a href="https://nuget.org/packages/logv.http">here</a>. And of course everything is open source under the Apache 2.0 license. The source code is on <a href="https://github.com/coolya/logv.http">Github</a>. If you want to report bugs or implement features just sent me a pull request or create an issue there.</p>

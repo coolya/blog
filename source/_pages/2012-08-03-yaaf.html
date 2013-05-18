@@ -1,0 +1,38 @@
+---
+layout: page
+title: YAAF
+tags: []
+status: pending
+type: page
+published: false
+meta:
+  _edit_last: '1'
+  _wp_page_template: default
+---
+<strong>Yet another AOP framework (YAAF)</strong> is, as the name implies, a aspect orientated programing framework. The motivation behind it is to provide a lightweight and ready to use AOP framework. It is licensed under the Apache 2 license. You can use it to add aspects to interface implementations at runtime. It depends on a service locator and allows aspects like: notification before and after a method is called, intercepting function calls and exception handling. Currently it is fully runtime based and uses <a href="http://msdn.microsoft.com/en-us/library/3y322t50.aspx" target="_blank">Reflection.Emit </a>to create types at runtime which include the aspects, I might add compiler time support with the <a href="http://www.microsoft.com/en-us/download/details.aspx?id=27744" target="_blank">Roslyn </a>components of Microsoft in the future to provide a mixed version which adds aspects that are known at compiler time to avoid the performance hit at runtime. But also being able to create them at runtime. It is heavily inspired by <a href="http://www.sharpcrafters.com/" target="_blank">postsharp </a>but not meant as a replacement or associated with it.
+
+The project is currently under heavy development, the API is likely to change and it is untested under many circumstances. The source is located on <a href="https://github.com/coolya/logv.YAAF" target="_blank">github </a>and you can also find the project on <a href="http://nuget.org/packages/logv.YAAF" target="_blank">nuget</a>. The source is not that much documented currently and I am working on a major refactoring of the ProxyBuilder cause the IL emit code is a mess. The projects source code includes a small sample that briefly shows how to use it.
+<h5><span style="text-decoration: underline;"><strong>How it</strong> works</span></h5>
+Everything starts with a service locator which you ask for an implementation of an interface. The service locator then resolves the implementation and inspects the interface if it has any aspects applied to it. If yes the service locator will tell the proxy builder to build a proxy between the interface and its implementation. This proxy takes care of the aspects defined on the interface. To do this it creates a new type at runtime which implements the wanted interface, this type will hold a reference to 'real' implementation. The builder then looks at every member of the interface, if it finds no aspects it adds code to simply call down to implementing objects member. If one or more aspect is present, it will add code to the type that calls the aspects based on their declaration (before, after or on exception). After this generation it will create an instance of the built type and inject the object that should be handled by the proxy. The created instance is passed up to the service locator which then returns the instance to its caller. This is fully transparent to the caller he gets the implementation of the interface decorated with the aspects.
+<h5><span style="text-decoration: underline;">What can I do with it?</span></h5>
+That pretty much depends on you requirements. I will just show some ideas for which I have used AOP.
+
+<strong>Prolog</strong> interception: enforce security (checks if the current user is in the right role to performs the operation), logging (log when a function gets called).
+
+<strong>Epilog</strong> interception: enforce security (check if return values would expose sensitive information), performance monitoring (log how long a function call took).
+
+<strong>Exception</strong> interception: throw your own exception instead of framework exceptions (prevent sensitive information from being passed up the stack).
+
+<strong>Method</strong> interception: caching (store return values of long running tasks inside a cache and return that value instead of calling the expensive workflow), threading (dispatch work on another thread and call back with the result), provide a useable default value (e.g. for Web Services pack the exception information into a JSON string).
+
+On all of the these use cases you have read access to the context, the context is the current method that is called with all its parameters and, if present, the return value. The method interception use case is an exception to this since you are able to manipulate the context for providing a return value. The order in which these aspects are executed is prolog -&gt; method intercept -&gt; exception (<strong>only when an exception occurred</strong>) -&gt; epilog (<strong>only if no exception was thrown</strong>). The framework makes no guarantee about the order in which the aspects of the same type are executed. If you have any special chain in which the have to be executed you have to implement that in your aspects.
+<h5><span style="text-decoration: underline;">Should I use it?</span></h5>
+In your production software? No! The project is in a really early stage and is likely to change in the next weeks. Also there are no unit tests that could verify that everything works fine.
+
+On your test playground? Sure! Play with it, get a feeling for AOP and if you like contribute to the project. Find bugs, there are many ;-) , write tests or add features. You can report bugs or add feature requests on <a href="https://github.com/coolya/logv.YAAF" target="_blank">github </a>if you like. Fork the project and have fun with it!
+<h5><span style="text-decoration: underline;">Planned features</span></h5>
+<ul>
+	<li>custom decorators that extend the proxy builder on your needs, e.g. generate members to the proxy for commanding in WPF viewmodels</li>
+	<li>provide a set of useful generic aspects that are ready to use</li>
+	<li>performance improvements</li>
+</ul>

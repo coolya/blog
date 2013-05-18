@@ -1,0 +1,130 @@
+---
+layout: post
+title: Creating a blog with F# and MongoDB
+tags:
+- .Net
+- Allgemein
+- F#
+status: draft
+type: post
+published: false
+meta:
+  _edit_last: '1'
+---
+<p>About a month ago I have written about an event driven webserver with F#. Now to dive a bit deeper into F# I decided to do a little sample. And whats the "Hello World" of Webframeworks these days? Exactly a blog.</p>
+
+<h2>Pre-Requisites</h2>
+
+<p><strong>MongoDB</strong></p>
+
+<p>This tutorial assumes that you have a running instance of mongoDB on the same machine as you are running your webserver. You can get mongo for all kinds of operation systems <a href="http://www.mongodb.org/downloads">here</a>.</p>
+
+<p><strong>FSharp</strong></p>
+
+<p>You will need a working FSharp compiler on your system, I am using Visual Studio since I am running on Windows but Mono Develop or your favorite texteditor with the mono fsharp compiler will work as well.</p>
+
+<p><strong>NuGet</strong></p>
+
+<p>I am using <a href="http://nuget.org">NuGet</a> to manage the dependencies. If you are running on mono <a href="http://monomvc.wordpress.com/2012/03/06/nuget-on-mono/">here</a> is a tutorial how to use NuGet there.</p>
+
+<p><strong>logv.http</strong></p>
+
+<p>The webserver I am using is the webserver I blogged about a month ago. I simply copied the code from that article into my project. I will no go any deeper into this, if you want to know more about it, read my <a href="http://www.logv.ws/228">blog post</a> about it.</p>
+
+<h2>Getting started</h2>
+
+<p>At first I create a blank FSharp console project. To that project I am adding a new source file named "logv.fs" which contains the webserver code from my <a href="http://www.logv.ws/228">previous blog post</a>.</p>
+
+<p>To order everything a bit make the program.fs look like this:</p>
+
+<pre><code>namespace logv
+    module blog =    
+        [&lt;EntryPoint&gt;]
+        let main argv = 
+            printfn "%A" argv
+            0
+</code></pre>
+
+<p>Ok now we need a data structure to store our blog posts in:</p>
+
+<pre><code>        type Blogpost() =
+            member val Id = Guid.Empty with get, set
+            member val Title = "" with get, set
+            member val Body  = "" with get, set
+            member val Created = DateTime.UtcNow with get, set
+</code></pre>
+
+<p>and a data type for comments:</p>
+
+<pre><code>    type Comment() = 
+        member val Person = "" with get, set
+        member val Comment = "" with get, set
+        member val Created = DateTime.UtcNow with get, set
+</code></pre>
+
+<p>After that we add the comments to the post so the type should finally look like this:</p>
+
+<pre><code>    type Blogpost() =
+        member val Id = Guid.Empty with get, set
+        member val Title = "" with get, set
+        member val Body  = "" with get, set
+        member val Created = DateTime.UtcNow with get, set
+        member val Comments : seq&lt;Comment&gt; = null with get, set
+</code></pre>
+
+<p>Now that we have our data we need to store the data. First we need the mongoDB driver in our project, to add it, we install the "mongocsharpdriver" via NuGet.</p>
+
+<p>The datastore is a simple wrapper around the mongoDB driver which provides an interface to do the following operation:</p>
+
+<ul>
+<li>get all posts in the database</li>
+<li>get a single post</li>
+<li>save a post to the database</li>
+</ul>
+
+<p>The datastore connects to the local mongoDB server, opens the database "blog" and uses a collection "posts" for storing the documents. The code looks like this:</p>
+
+<pre><code>    type BlogStore() =
+        let client = new MongoClient("mongodb://localhost")
+        let server = client.GetServer()
+        let collection = server.GetDatabase("blog").GetCollection("posts")
+        member x.getAllPosts(callback) : unit = 
+            let queryable = collection.AsQueryable&lt;Blogpost&gt;()
+            let allPosts = query { 
+                                for post in queryable do
+                                select post }
+            callback(allPosts)
+
+        member x.getSinglePost(id, callback) : unit = 
+            let queryable = collection.AsQueryable&lt;Blogpost&gt;()
+            let thePost = query { 
+                                for post in queryable do
+                                where (post.Id = id)
+                                select post 
+                                exactlyOne}
+            callback(thePost)
+
+        member x.savePost(post) = 
+            collection.Save&lt;Blogpost&gt;(post) |&gt; ignore
+</code></pre>
+
+<p>Now that we have a datastore we still have no webser running so lets fix this by setting up a server:</p>
+
+<pre><code>    let main argv = 
+        let app = new Server("localhost", 30000)
+
+        app.Get |&gt; Observable.add (fun ctx -&gt; response ctx |&gt; write "Hello World!" |&gt; close)
+
+        app.Start()
+        Console.WriteLine(sprintf "Server %s listening on port %i" app.Host app.Port)
+        Console.ReadLine() |&gt; ignore
+
+        app.Stop()
+        0
+</code></pre>
+
+<p>We start a webserver that is listening on localhost on port 30000, to test everything is working correctly start the program and open http://localhost:30000/ in your browser. It should print "Hello World!". After we have a running webserver we need to get some content in there and run a real website with it.</p>
+
+<h2>The Website</h2>
+
+<p>I am using</p>

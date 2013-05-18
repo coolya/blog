@@ -1,0 +1,32 @@
+---
+layout: post
+title: Die Reiseauskunft der Deutschen Bahn
+tags:
+- Architecture
+- architecture
+- Deutsche Bahn
+- German
+- REST
+status: publish
+type: post
+published: true
+meta:
+  _jd_twitter: ! 'how tu fuck up RESTful HTTP: #title# #url#'
+  _edit_last: '1'
+  _jd_tweet_this: 'yes'
+  _wp_jd_target: http://www.logv.ws/130
+  _jd_wp_twitter: ! 'a:1:{i:0;s:85:"how tu fuck up RESTful HTTP: Die Reiseauskunft
+    der Deutschen Bahn http://goo.gl/eHTg7";}'
+  _wp_jd_goo: http://goo.gl/eHTg7
+---
+<strong>oder wie fickt man RESTful-HTTP richtig.</strong>
+
+<strong></strong>Die Deutsche Bahn betreibt seit Jahren ein Auskunftsystem unter der Domain <a href="http://reiseauskunft.bahn.de/">http://reiseauskunft.bahn.de/</a> dort kann man z.B. Tickets buchen, sich Verbindungen anzeigen lassen oder seit neustem auch einen Zug verfolgen. Damit kann z.B. <a href="http://reiseauskunft.bahn.de/bin/bhftafel.exe">rausfinden </a>ob ein Zug pünktlich am Bahnhof ankommt. Eigentlich eine sinnvolle Sache, aber man kann sich keine Links auf einen Zug speichern. Denn das Webinterface der Bahn generiert immer neue URLs für die gleiche Zugnummer, diese sind auch nur eine bestimmte Zeit gültig, selbst ein einfacher refresh auf einer Ergebnisseite mit weiterführenden Links führt zu neugenerierten URLs.
+
+<strong>Da stellt sich die Frage warum das Ganze?</strong>
+
+Eigentlich würden sich die <a href="http://de.wikipedia.org/wiki/Zugnummer">Zugnummern </a>der Bahn perfekt eignen um einen Zug im Suchsystem adressieren zu können. Es befindet sich immer nur ein Zug mit der jeweiligen Zugnummer im Schienensystem der Deutschen Bahn. Selbst Ersatzzüge könnte man z.B. mit dem Responsecode 307 abbilden.
+
+So wäre es für jemanden der jeden Morgen den IC 2061 nutzt möglich z.B. über die URL <a href="http://reiseauskunft.bahn.de/bin/trainsearch.exe/dn/IC%202061">http://reiseauskunft.bahn.de/bin/trainsearch.exe/dn/IC 2061</a> die aktuellen Informationen zu diesem Zug zu finden. Ein kurzer klick auf einen gesetzten Bookmark würde vollkommen ausreichen um die Informationen zu haben. Aber Dinge wie z.B. Chrome to Phone würde dann sinnvoll funktionieren. Doch bei der Bahn ist man anscheinend anderer Meinung, man möchte lieber die Menschen nerven und jedes mal in der Suchmaske den Zug eingeben lassen.
+
+Nun könnte man damit entweder zu dem Schluss kommen, dass die Bahn einfach "das Internet" nicht verstanden hat oder ein Interesse daran hat das es möglichst schwierig ist an aktuelle Zugdaten zu kommen, das eine fest URL für einen Zug es erheblich erleichtern würde die Informationen über diesen Abzugreifen. Welches davon zutreffent ist weiß ich nicht und muss jeder Leser für sich selbst entscheiden.

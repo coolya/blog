@@ -1,0 +1,63 @@
+---
+layout: post
+title: installing mbeddr on ubuntu 13.04
+tags:
+- java
+- mbeddr
+- ubuntu
+status: publish
+type: post
+published: true
+meta:
+  _jd_tweet_this: 'yes'
+  _edit_last: '1'
+  _wp_jd_target: http://www.logv.ws/286
+  _wp_jd_goo: http://goo.gl/nzqdZ
+  _jd_wp_twitter: ! 'a:1:{i:0;s:63:"New post: installing mbeddr on ubuntu 13.04 http://goo.gl/nzqdZ";}'
+---
+<p>This guide covers how to build and install <a href="http://mbeddr.com">mbeddr</a> from source, it does not include how to install the fancy model checking tools.</p>
+
+<p>After you have installed Ubuntu 13.04 you will notice that it already ships with Java 7. Since MPS only works with Java 6 you need to downgrade it. The problem is that the official package repository of Ubuntu does not contain a Oracle Java version anymore, there is OpenJDK 6 but it will not work with properly MPS. You can go to Oracles <a href="http://www.oracle.com/technetwork/java/javasebusiness/downloads/java-archive-downloads-javase6-419409.html#jdk-6u43-oth-JPR">download page</a> and install it on your own but that is pain in the ass. Luckily there is a <a href="http://www.webupd8.org/2012/11/oracle-sun-java-6-installer-available.html">unofficial repository</a> that can do all the that for you. To add the repository and install Java run this commands:</p>
+
+<pre><code>sudo add-apt-repository ppa:webupd8team/java
+sudo apt-get update
+sudo apt-get install oracle-java6-installer
+</code></pre>
+
+<p>This gives you a working Java 6 but you need to make it the default Java on your machine. This is done with:</p>
+
+<pre><code>sudo apt-get install oracle-java6-set-default
+</code></pre>
+
+<p>Now you can install MPS from the <a href="http://www.jetbrains.com/mps/download/index.html">JetBrains page</a>. Extract the tar.gz to your favorite location. 
+In order to be able to build and run mbeddr you will need some additional stuff: ant, gcc, git, make and graphvis. To install them run:</p>
+
+<pre><code>sudo apt-get install ant git-core graphviz build-essential
+</code></pre>
+
+<p>After that go to the location where you want to put the mbeddr source code and clone the git repository with:</p>
+
+<pre><code>git clone https://github.com/mbeddr/mbeddr.core.git
+</code></pre>
+
+<p>Once that is finished set up the build properties file in <em>/path/to/mbeddr.core/code/languages/</em> there is an example file in the same location that should give you a good point to start from. The finial configuration should look something like this:</p>
+
+<pre><code>mbeddr.github.core.home=/build/mbeddr.core/
+mps.platform.caches=/build/mps-ant-caches/
+
+# MPS installation
+mps.home=/build/mps/
+</code></pre>
+
+<p>To build mbeddr run:</p>
+
+<pre><code>./rebuildLanguagesAfterCheckout.sh
+</code></pre>
+
+<p>in the same location.</p>
+
+<p>When that is finished start your MPS and navigate to <em>File -> Settings</em>, there you select <em>GlobalLibraries</em> and create a new variable called <em>mbeddr.core</em> which points to <em>path/to/mbeddr.core/code</em>, save the setting and you are done.</p>
+
+<p>This should give you a working basic mbeddr setup, to verify that it works you can open the tutorial project from the <a href="http://mbeddr.wordpress.com/getit/">mbeddr page</a> and run some of the samples.</p>
+
+<p><strong>Note:</strong> You will not be able to run any of the formal verification stuff, since we did not install them yet. I will extend the guide in the near future to cover that too.</p>

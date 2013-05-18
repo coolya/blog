@@ -1,0 +1,251 @@
+---
+layout: post
+title: ! 'Trainmonitor: The API and why it sucks'
+tags:
+- Allgemein
+- architecture
+- HTTP
+- REST
+- Trainmonitor
+- Zugmonitor
+status: publish
+type: post
+published: true
+meta:
+  _jd_tweet_this: 'yes'
+  _edit_last: '1'
+  _wp_jd_goo: http://goo.gl/TYktr
+  _wp_jd_target: http://www.logv.ws/237
+  _jd_wp_twitter: ! 'a:2:{i:0;s:68:"New post: Trainmonitor: The API and why it sucks
+    http://goo.gl/TYktr";i:1;s:71:"Post Edited: Trainmonitor: The API and why it sucks
+    http://goo.gl/TYktr";}'
+  _wpt_failed: ! 'a:5:{s:6:"author";b:0;s:8:"sentence";s:71:"Post Edited: Trainmonitor:
+    The API and why it sucks http://goo.gl/TYktr";s:5:"error";s:71:"This tweet is
+    identical to another Tweet recently sent to this account.";s:4:"code";i:403;s:9:"timestamp";i:1357899607;}'
+  _oembed_7db06be2904856be91c38c3836f8e645: ! '{{unknown}}'
+---
+<p>Recently I have published my Trainmonitor app, that is using a backend server to get the train data and do the notifications. To communicate with the server I have an HTTP API, some people might call it a RESTful API, but we will see later that this is not the case. There are several issues with the API, part of the done intentionally done wrong and others not. So why would I do stuff wrong if I knew it was wrong? Do demonstrate what's wrong and to show what the benefit is when you do a <strong>real</strong> RESTful HTTP API with hypermedia. The idea about this came to me when I ret <a href="http://www.bjro.de/2012/10/16/the-pain-of-a-non-hypermedia-http-api/">this blog post</a> about HTTP APIs at XING. What the API currently is, is some kind of remote method invocation over HTTP.</p>
+
+<h2>So what's wrong with the API?</h2>
+
+<p>Let's have a look at some URIs:</p>
+
+<pre><code>http://trainmonitor.logv.ws/api/v1/germany/stations
+http://trainmonitor.logv.ws/api/v1/germany/trains
+</code></pre>
+
+<p>At first you can see there is some kind of version in the URI. In a RESTful world this should not be needed. The data the API responses should guide the client through the resources. There should just be a single URI you need to know to discover the hole API. We will talk about this later, so lets have a look at a typical request - response: For testing purpose I am issuing a request from Chrome to <em>http://trainmonitor.logv.ws/api/v1/germany/trains</em>:</p>
+
+<pre><code>Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Charset:ISO-8859-1,utf-8;q=0.7,*;q=0.3
+Accept-Encoding:gzip,deflate,sdch
+Accept-Language:de-DE,de;q=0.8,en-US;q=0.6,en;q=0.4
+Cache-Control:max-age=0
+Connection:keep-alive
+User-Agent:Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11
+</code></pre>
+
+<p>The server response headers looks like this:</p>
+
+<pre><code>Cache-Control:public, max-age=105
+Content-Encoding:gzip
+Content-Length:28515
+Content-Type:application/json
+Date:Tue, 08 Jan 2013 20:41:44 GMT
+Keep-Alive:timeout=15,max=100
+Server:Mono-HTTPAPI/1.0
+
+[{
+   "train_nr": "ICE 576",
+   "status": 4,
+   "stations": null,
+   "started": null,
+   "nextrun": "2013-01-10T12:21:00Z",
+   "finished": null
+}, {
+   "train_nr": "ICE 37",
+   "status": 4,
+   "stations": null,
+   "started": null,
+   "nextrun": "2013-01-10T14:23:00Z",
+   "finished": null
+}, {
+   "train_nr": "ICE 909",
+   "status": 1,
+   "stations": null,
+   "started": "2012-12-08T09:30:01.742Z",
+   "nextrun": "2012-12-08T15:49:00Z",
+   "finished": "2012-12-08T15:56:52.916Z"
+}]
+</code></pre>
+
+<p>According to the header we got some gzip compressed JSON that can be cached for the next 105 seconds. But we don't really know what the response contains, except it is some kind of JSON. This means the consumer needs more out of band knowledge to be aware how to process the data. When we look at the payload, the JSON, we see there are no links, but some IDs. If the client now wants to access other resources that have a relationshilt to this one the client needs to know where to find this resource. Once again out of band knowledge is needed.</p>
+
+<h2>How to fix the mess?</h2>
+
+<p>Lets start with the problem that the client needs to know the complete URI layout of the server. Wouldn't it be nice if the client only needs to know a single URI?. This URI might be <em>http://trainmonitor.logv.ws/api/</em> and the server responds with something like this:</p>
+
+<pre><code>Cache-Control:public, max-age=86400
+Content-Encoding:gzip
+Content-Length:28515
+Content-Type:application/vnd.logv.trainmonitor-discovery+json
+
+{"links":[{"rel":"germany","href":"http://trainmonitor.logv.ws/api/germany"}]}
+</code></pre>
+
+<p>As you can see the <em>Content-Type</em> is now <em>application/vnd.logv.trainmonitor-discovery+json</em> and you might notice that I am using the non standard <em>+json</em> suffix. This is currently in <a href="http://tools.ietf.org/html/draft-ietf-appsawg-media-type-suffix-regs-04">draft</a> status to update the <em>+xml</em> <a href="http://tools.ietf.org/html/rfc3023">RFC</a>. My mediatype <em>vnd.logv.trainmonitor-discovery</em> is a ripoff of the html <a href="http://www.w3schools.com/tags/tag_link.asp">link element</a>, extended with some more semantic for the <em>rel</em> element. The client now knows that the data is formatted as JSON and what this JSON means. If the client wants to get more information about germany it knows that it should issue a GET request to <em>http://trainmonitor.logv.ws/api/germany</em>. And the server should answer with:</p>
+
+<pre><code>Cache-Control:public, max-age=86400
+Content-Encoding:gzip
+Content-Length:28515
+Content-Type:application/vnd.logv.trainmonitor-discovery+json
+
+{
+   "links": [{
+       "href": "http://trainmonitor.logv.ws/api/germany/staions",
+       "rel": "stations"
+   }, {
+       "href": "http://trainmonitor.logv.ws/api/germany/trains",
+       "rel": "trains"
+   }]
+}
+</code></pre>
+
+<p>As before the <em>Content-Type</em> is <em>application/vnd.logv.trainmonitor-discovery+json</em>, but we see some new <em>rel</em> data. When the client parses the response data it finds the information where to find the stations and trains for germany. All responses contain a Cache-Control header with a value of 864000 seconds, this allows the client or any other cache on the way from the origin server to the client to cache this resource for a day. This way the origin server is not hammered with requests for discovering the resource layout and the clients can reuse a fresh resource without contacting the origin server, but after at least 24 h they will ask you again. Why is this good instead of hardcoding the URIs? Once your services grows you might experience more load on the server and single server might not be able to answer all the requests in reasonable time. So you need to scale horizontally. To do this you can reroute all the request for a single country to another server. Or you can have single server for stations and one for trains or mixing it all together. E.g. having a single server for the stations of all countries but one server for each countries trains, because this data changes much more often and is more interesting to the clients. To do so no change on the clients is required, all of them will use the new infrastructure without touching them.</p>
+
+<h2>What about Links?</h2>
+
+<p>After that we have talked about the URIs and how the client gets to know them, lets have a look at the resources and its representation. We start with the stations from <em>http://trainmonitor.logv.ws/api/v1/germany/stations</em>. A typical response looks like this:</p>
+
+<pre><code>Cache-Control:public, max-age=86400
+Content-Encoding:gzip
+Content-Length:28515
+Content-Type:application/json
+[{
+   "lat": 47.5500209,
+   "lon": 14.3122344,
+   "name": "Selzthal",
+   "id": 380
+}, {
+   "lat": 52.5104217,
+   "lon": 13.4969506,
+   "name": "Berlin-Lichtenberg",
+   "id": 394
+}]
+</code></pre>
+
+<p>What's wrong here? The <em>Content-Type</em>! From the header the client just knows that it is some kind of JSON, but has no clue whats the containing JSON means. The client would need to <strong>know</strong> that this particular URI returns a list station objects. To fix this, the <em>Content-Type</em> might look like this <em>application/vnd.logv.trainmonitor-stations+json</em>. And what about the <em>Cache-Control</em>? 24 hours freshness??? Yes, this is valid, because of the fact that the backend server only refreshes the station list, from its data source, once a day this resource can be cashed a full day.</p>
+
+<p>Now lets move on to the more interesting <strong>trains</strong>. A response from <em>http://trainmonitor.logv.ws/api/v1/germany/trains</em> looks like this:</p>
+
+<pre><code>Cache-Control:public, max-age=105
+Content-Encoding:gzip
+Content-Length:28515
+Content-Type:application/json
+[{
+   "train_nr": "ICE 576",
+   "status": 4,
+   "stations": null,
+   "started": null,
+   "nextrun": "2013-01-10T12:21:00Z",
+   "finished": null
+}, {
+   "train_nr": "ICE 37",
+   "status": 4,
+   "stations": null,
+   "started": null,
+   "nextrun": "2013-01-10T14:23:00Z",
+   "finished": null
+}, {
+   "train_nr": "ICE 909",
+   "status": 1,
+   "stations": null,
+   "started": "2012-12-08T09:30:01.742Z",
+   "nextrun": "2012-12-08T15:49:00Z",
+   "finished": "2012-12-08T15:56:52.916Z"
+}]
+</code></pre>
+
+<p>Once again the Content-Type is too general and should be more precise like <em>application/vnd.logv.trainmonitor-trains+json</em>. The <em>Cache-Control</em> is now much shorter, why? The server refreshes trains on schedule and calculates the time to the next refresh when a client issues a GET request. Then it sets the <em>Cache-Control</em> header according to this value. Now a closer look at the JSON content and why this is clearly not a hypermedia type. Why is the <em>stations</em> property always null? This requires some explanation ... In the domain data model the stations property is a list off all stations of each train with arrival, departure and delay times. A complete list of all trains contains about 1300 trains. Also the client is not interested in all the trains and its delays. That is why I decided to omit this value in the train list and only include it when a single train is requested. But how do we get this data? Good question, once again the client need out of band information that is not part of the conversation with the server. The URI template for a train looks like this <em>http://trainmonitor.logv.ws/api/v1/germany/trains/{train_nr}</em>. For the ICE 909 this would be <em>http://trainmonitor.logv.ws/api/v1/germany/trains/ICE%20909</em>. In order to solve this issue we need to include this information in the reposen. A response might look like this:</p>
+
+<pre><code>{
+   "train_nr": "ICE 909",
+   "link": {
+       "href": "http://trainmonitor.logv.ws/api/v1/germany/trains/ICE%20909",
+       "rel": "train"
+   }
+   "status": 1,
+   "stations": null,
+   "started": "2012-12-08T09:30:01.742Z",
+   "nextrun": "2012-12-08T15:49:00Z",
+   "finished": "2012-12-08T15:56:52.916Z"
+}
+</code></pre>
+
+<p>Simply by addeing a <em>link</em> attribute the client knows where to find the resource. But still the stations attribute is null, so lets fix that in a similar way:</p>
+
+<pre><code>{
+   "train_nr": "ICE 909",
+   "link": {
+       "href": "http://trainmonitor.logv.ws/api/v1/germany/trains/ICE%20909",
+       "rel": "train"
+   }
+   "status": 1,
+   "stations": {
+       "href": "http://trainmonitor.logv.ws/api/v1/germany/trains/ICE%20909/stations",
+       "rel": "stationdetails"
+   }
+   "started": "2012-12-08T09:30:01.742Z",
+   "nextrun": "2012-12-08T15:49:00Z",
+   "finished": "2012-12-08T15:56:52.916Z"
+}
+</code></pre>
+
+<p>Just like before a <em>link</em> element lets client know where to find it. The other resources contain similar fails, so I will not discuss them here, it would get boring for you to read the same over and over again.</p>
+
+<h2>Why should I use hypermedia?</h2>
+
+<p>This is easy! Because you gain a lot of flexibility and get a loosely coupled system. But is it worth to do so? Isn't the client getting much more complex?</p>
+
+<p>I will compare which information the client need before and after using hypermedia.</p>
+
+<p><strong>Before</strong></p>
+
+<ul>
+<li>data type for trains</li>
+<li>data type for stations</li>
+<li>data type for stationdetails</li>
+<li>URI template for trains</li>
+<li>URI template for stations</li>
+<li>URI template for a single train</li>
+<li>URI template for stations of a train</li>
+<li>connection between each URI (template) and its datatype</li>
+</ul>
+
+<p>To visualize this I drew a little diagram with the direct relations between the resources.</p>
+
+<p><img src="http://www.logv.ws/wp-content/uploads/2013/01/none-hypermedia.png" alt="none hypermedia relations" /></p>
+
+<p><strong>After</strong></p>
+
+<ul>
+<li>data type for trains</li>
+<li>data type for stations</li>
+<li>data type for stationdetails</li>
+<li>data type for discovery</li>
+<li>a single URI</li>
+</ul>
+
+<p>And that is how the diagram now looks:</p>
+
+<p><img src="http://www.logv.ws/wp-content/uploads/2013/01/hypermedia.png" alt="hypermedia relations" /></p>
+
+<p>As you can see all the resources now have explicit connections, instead of beeing just two independant islands, that were connected with out of band knowledg.</p>
+
+<p>Some people might argue that implementing a client that can follow links and parse a slightly more complex data type requires more work to. That might be true! But is it really that much more work to do? Using a URI from an resources attribute or formatting a attribute of a resource into a template is not that much different!</p>
+
+<p>But you must put more work into the design of your resources and decouple them from their representation. The task is not: <strong>how do publish my domain model as JSON or XML</strong> It is: <strong>how should the resources for my domain model look like and how is their relationship to each other</strong>. After you have an abstract model of your resources you can think of how to represent them. Depending on your needs you might have a single data type for your <a href="http://www.innoq.com/blog/st/2011/12/media-types/">whole domain</a>. Which is often the case when you use XML, because XML offers more semantics than, e.g. JSON. But you can either find ways to do so in JSON. On the other hand you can use a data type for each kind of resource.</p>
+
+<h2>OK, but where is the API?</h2>
+
+<p>While I was writing this post I decided not to publish a API documentation, right now! As you can see there are several issues with it. I wrote this post to show other people in which traps I have gone and how fix / avoid them. I will redesign the API in the next weeks and reimplemt the client side completly. After that I will publish a complete API documentation and open the API for everyone. In the meantime you can have a look at the trainmonitor <a href="https://github.com/coolya/ws.logv.trainmonitor">android app</a> which just got open sourced!</p>

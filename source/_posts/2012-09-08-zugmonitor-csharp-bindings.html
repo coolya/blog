@@ -1,0 +1,25 @@
+---
+layout: post
+title: Zugmonitor CSharp bindings
+tags:
+- .Net
+- .NET
+- C#
+- German
+- REST
+- Zugmonitor
+status: publish
+type: post
+published: true
+meta:
+  _jd_wp_twitter: ! 'a:1:{i:0;s:56:"New post: Zugmonitor CSharp bindings http://goo.gl/Yicd4";}'
+  _wp_jd_goo: http://goo.gl/Yicd4
+  _wp_jd_target: http://www.logv.ws/127
+  _jd_tweet_this: 'yes'
+  _edit_last: '1'
+---
+Da sich der Inhalt dieses Posts hauptsächlich an deutschsprachige Entwickler richtet verfasse ich diesen Post auf Deutsch. Es wird einer von mehreren sein, da ich dieses Thema in nacher Zukunft etwas ausführlicher bearbeiten werde.
+
+Durch Zufall bin ich bei der suche nach einer API für die Zugdaten der Deutschen Bahn auf ein sehr interessantes Projekt der Süddeutschen Zeitung (SZ) gestoßen. Es handelt sich um den <a href="http://zugmonitor.sueddeutsche.de/" target="_blank">Zugmonitor</a>, der Verspätungen in nahe zu Echtzeit visualisiert und sehr erfreulicherweise auch eine <a href="http://www.opendatacity.de/zugmonitor-api/" target="_blank">API </a>bereitstellt um mit diesen Daten zu arbeiten. Also habe ich schnell ein paar Minuten Freizeit geopfert und eine CSharp Assembly geschrieben die einen einfachen Zugriff auf die Daten ermöglicht. Das ganze ist eine Portable Class Library, die mit .Net 4, Silverlight 5 oder WinRT funktioniert. Da die Datenmenge pro Abfrage der Züge relativ groß (&gt;1MB) sein kann habe ich ganz bewusst eine Windows Phone Kompatibilität weggelassen. Für eine Reduzierung der Datenmenge und noch einiges mehr habe ich ein anderes Projekt in der Pipeline, aber dazu mehr wenn es fertig ist ;-). Der Quellcode ist auf <a href="https://github.com/coolya/CSharp.Zugmonitor" target="_blank">Github </a>unter Apache 2 Lizenz verfügbar und die Binaries gibt es bei <a href="https://github.com/coolya/CSharp.Zugmonitor/downloads">dort</a> auch. Einzige Abhängigkeit ist der JSON Serialisierer von <a href="http://james.newtonking.com/projects/json-net.aspx" target="_blank">Json.Net</a>.
+
+Bitte vergesst nicht das die API nur <strong>nicht kommerzielle Nutzung</strong> bereit gestellt wird und das die Datenquelle als "Zugmonitor von süddeutsche.de/OpenDataCity" genannt werden soll. Außerdem bittet das Team darum dass Ihr in einer kurzen Mail den Link zu eurem Projekt kundtut.

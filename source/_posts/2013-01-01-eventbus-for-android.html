@@ -1,0 +1,70 @@
+---
+layout: post
+title: EventBus for Android
+tags:
+- Allgemein
+- Android
+- android
+- Architecture
+- architecture
+- events
+- java
+- refactoring
+- Zugmonitor
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+  _jd_tweet_this: 'yes'
+  _wp_jd_goo: http://goo.gl/EUujQ
+  _wp_jd_target: http://www.logv.ws/251
+  _jd_wp_twitter: ! 'a:1:{i:0;s:50:"New post: EventBus for Android http://goo.gl/EUujQ";}'
+---
+<p>The new version of trainmonitor adds some new features like syncing multiple devices. Which was one of the most challenging features to implement. The app uses a lot of threading to do nearly everything except UI drawing off the main thread. This required a lot of callbacks and it really started to get messy when the same action should be triggered from different sources. To illustrate some of the issues I had we can have a look at the start up of my app. To illustrate it I have drawn some state diagram: <img src="http://www.logv.ws/wp-content/uploads/2012/12/Events.png" alt="app startup" /></p>
+
+<p>As you can see there are several way through the application. And here is a typical peace of code:</p>
+
+<pre><code>private void chooseAccount(final MainActivity that)
+{
+    if(!Installation.wasChooseAccountShown(this))
+    {
+    new ChooseAccountFragment(new Runnable() {
+        @Override
+        public void run() {
+            Installation.setChooseAccountShown(that);
+            init();
+        }
+    }).show(getSupportFragmentManager(), "choose_account");
+    }
+    else {
+        init();
+    }
+
+}
+</code></pre>
+
+<p>Both paths though the code call the same init function. The init function is the point where the menu is set up, the check for a valid Google Cloud Messaging registration and if need the registration is started. Now there nothing really wrong with it but it tends to get a bit messy when I wanted to extend the logic that is performed when the disclaimer was shown. Since I am doing a lot of Servicebus related work in my daily work for a client I searched if there is something similar for android. And indeed there is a android solution for it, <a href="http://greenrobot.de/greenrobot/neues-android-open-source-projekt-eventbus">EventBus</a>. After some refactoring the code now looks like this:</p>
+
+<pre><code>@SuppressWarnings("UnusedDeclaration")
+public  void onEvent(DisclaimerAcceptedEvent event)
+{
+    if(!Installation.wasChooseAccountShown(this))
+    {
+        final MainActivity that = this;
+        new ChooseAccountFragment(new Runnable() {
+            @Override
+            public void run() {
+                Installation.setChooseAccountShown(that);
+                mBus.post(new AccountChoosnEvent());
+            }
+        }).show(getSupportFragmentManager(), "choose_account");
+    }
+    else
+    {
+        mBus.post(new AccountChoosnEvent());
+    }
+}
+</code></pre>
+
+<p>Now the code does not look that much different, the explicit calls to 'init' where replaced with a post on the EventBus and the function itself just listens to a Event and is then called by the EventBus. But you can now add easily new functionality that is called when the event occurs. This especially useful when triggering the events from different sources, e.g. refreshing a list of subscriptions from the UI or by a message from the cloud.</p>

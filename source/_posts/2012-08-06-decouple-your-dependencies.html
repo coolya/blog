@@ -1,0 +1,60 @@
+---
+layout: post
+title: Decouple your dependencies
+tags:
+- .Net
+- Allgemein
+- Architecture
+- architecture
+- C#
+- functional decompisition
+- Refactoring
+- refactoring
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+  _jd_tweet_this: 'yes'
+  _jd_twitter: ''
+  _wp_jd_clig: ''
+  _wp_jd_bitly: ''
+  _wp_jd_wp: http://www.logv.ws/?p=88
+  _wp_jd_yourls: ''
+  _wp_jd_url: ''
+  _wp_jd_target: http://www.logv.ws/88
+  _jd_wp_twitter: ! 'a:1:{i:0;s:61:"New post: Decouple your dependencies http://www.logv.ws/?p=88";}'
+  _jd_post_meta_fixed: 'true'
+---
+In my spare time I am working on a metro style app for <a href="http://www.geekli.st" target="_blank">geekli.st</a>, which I wanted to write with CSharp. Since I don't wanted to create hole REST API bindings by myself, I had a look at the official API-wrappers and  found the CSharp <a href="https://github.com/scottksmith95/CSharp.Geeklist" target="_blank">bindings </a>for geekli.st by Scott Smith. But there  was a problem, there was no Windows Runtime version of it. This was not caused by the code itself, it where its dependencies. It depends on <a href="http://nuget.org/packages/Spring.Social.Core" target="_blank">Spring.Social.Core</a> which depends on <a href="http://nuget.org/packages/Spring.Rest" target="_blank">Spring.Rest</a>. Both of them are currently not available for the Windows Runtime. Due to the architecture of the component I decided to remove this dependency and replace it with something that would run on the Windows Runtime.
+
+I analysed the code and it turned out that those compoenents where used to perform the <a href="http://oauth.net/" target="_blank">OAuth </a>and HTTP handling. After some research I found <a href="https://github.com/myquay/Chq.OAuth" target="_blank">Chq.OAuth</a> a simple OAuth component for the WinRT. I decided to replace the spring components with Chq.OAuth. Since the public API was contract based with interfaces this wasn't a big deal. After a week or two the rewrite was done and I was able to stay 95% API compatible to the original version. The hole project was a single assembly which was ready to use and the only thing needed to get it working where the OAuth tokens for the API. I was pretty happy with it since I was able to port everything an was able to keep the API.
+
+Now that I got further in the development I had some non functional requirement: <strong>caching</strong>. The app should be able to present some useful information even without a connection to the Internet. Since the app uses a service layer to encapsulate the geekli.st api wrapper I wanted to add the aspect in there. But it turned out that it wasn't a good decision I would have had to rewrite a lot of the serialization and deserialization code to save the data on disk.
+
+I had a look at the architecture and asked myself why would I have created it that way, I should have known better. In my daily work I am telling customers to decouple their software and avoid any hard dependencies and know I am exactly doing that - using a third party component directly. :-(
+
+Ok, lets gets our hands dirty and have a look why I am really using this components. Here is a little sample from the code where the only real usage of the component occurs:
+<pre>        Chq.OAuth.Client client;
+        private OAuthRequest GetRequest(Uri uri,  object parameter)
+        {
+            return client.MakeRequest("GET")
+                    .ForResource(client.AccessToken.Token, uri)
+                    .WithParameters(parameter)
+                    .Sign(client.AccessToken.Secret);
+        }
+        var req = await GetRequest(new Uri(uri)).ExecuteRequest();</pre>
+ The 'ExecuteRequest' function returns the HTTP response body as a string. The client also holds some state but for the porpose it is used inside the geekli.st API wrapper thats not important. In essence it is a black box that take a URI and transforms it into a response string. So I refactored the component to exactly use this behaviour.
+<pre>        private readonly Func<Uri, Task<string>>; _getHandler;
+        private Task GetRequest(Uri uri)
+        {
+            return _getHandler(uri);
+        }
+        var req = GetRequest(new Uri(uri)).Result;</pre>
+What have I done? I replaced the explicit usage of the <em>client</em> with a <em>'Func&lt;Uri, Task&lt;string&gt;&gt;'</em> to have just a pointer to an implementation that transforms a URI into a string. And the constructor of the API now takes this function pointer as an argument, so you are able to inject the transport layer of your favour and add aspects to it if you need to. But now everyone would have to deal with OAuth and its state on its own, even if he just wants to get some data from the API, right? Yes and no, if would have just refactored the assembly to not depend on anything else yes, but I have created a second assembly which provides a ready to use API that then injects the dependency via function pointers into the core assembly. 
+
+If you are interested in the actual code that ware refactored you can have a loot at this <a href="https://github.com/coolya/CSharp.Geeklist/compare/0e3e4e1...b07495f" target="_blank">diff </a>on github.
+<h5>Why am I writing all this?</h5>
+Because I think this a pretty simple and good example on what components should be focused and why it is important to separate your responsibilities. If you design a component this component should only focus on its actual task and nothing more. In my case it transforms JSON into objects and provides way to do remote procedure calls, therefor it marshalls data in the format the other side accepts. This does not include any transport or authentication functionality. So I removed all these aspects from the component and allowed the users to decide how to do this. But this does not mean you should not create ready to use components. As you can see I added a assembly that allows to use the core components right out of the box, but my internal architecture allows that on more advanced use cases you can implement your own transport layer.
+
+So if you design your API you should keep in mind to provide a ready to use interface that allows easy and fast useage of your compoments but also provide a much richer API that gives the user the maxium of control. To archiefe this, break your problem down to its core problem by using <a href="http://en.wikipedia.org/wiki/Functional_decomposition" target="_blank">functional decomposition</a>. And then after you have done that think about what Interface would you need to fulfill both use cases. If I find some time in the near future I will write a details post how to use functional decomposition on such a problem.

@@ -1,0 +1,118 @@
+---
+layout: post
+title: Expression are awesome, right?
+tags:
+- .Net
+- C#
+- Expression
+status: draft
+type: post
+published: false
+meta:
+  _edit_last: '1'
+  _jd_wp_twitter: ! 'a:1:{i:0;s:36:"New link: Goole  http://goo.gl/zIfjp";}'
+---
+Expression are pretty useful, many of us use them really often. Introduced for LINQ there are many other use cases for example compiler check able Propertychange events. If you ask for how to implement INotifyPropertyChange on Stackoverflow you will get answers like that.
+
+<a href="http://mfelicio.com/2010/01/10/safe-usage-of-inotifypropertychanged-in-mvvm-scenarios/">http://mfelicio.com/2010/01/10/safe-usage-of-inotifypropertychanged-in-mvvm-scenarios/</a>
+
+But not many people think about the cost they add at runtime. I must admit I didn't, too. But in the last weeks I was involved into a new project at a customer, which took that to my attention.  The project is huge .Net C# project which was started back in the times where .Net 2 was released and the purposed Microsoft Design pattern for such Applications was CAB &lt;todo add CAB link&gt;. The project is about 7M PLOC and suffers some problems in terms of  maintainability and performance.  In one of the project meetings a discussion about using expressions for creating Bindings and publishing NotifyPropertyChanged events came up. Since there are allready some performance issues the killer argument against using it was that it adds a significant performance overhead.  But noone was able to come up with some numbers and their real world impact on the application performance. Some argued that expressions are just some special string that compiler checks. Well lets proove whats really going on:
+
+I started with a simple test how long it takes to do some expression evaluation like you would do when you want to get the member name from an expression. With some simple code like this:
+<pre>        private static string Test(Expression&gt; expression )
+        {
+            return GetMemberName(expression);
+        }
+
+        private static string GetMemberName(Expression expression)
+        {
+            var sw = Stopwatch.StartNew();
+
+            var lambda = expression as LambdaExpression;
+
+            if (lambda == null )
+                throw new  ArgumentException();
+
+            var member = lambda.Body as MemberExpression;
+
+            if(member == null)
+                throw new ArgumentException();
+
+            sw.Stop();
+
+            ExpressionEvalTimes.Add(sw.ElapsedTicks);
+
+            return member.Member.Name;
+
+        }</pre>
+And the result was some kind of suprising.  About ~45 Ticks per call, thats a significant overhead, but since it is just a pretty simple implementation I wanted to looks a bit closer to it if it is possible to speed it up a bit. Lets check the pure evaluation time:
+<pre>        private static string GetMemberName(Expression expression)
+        {
+            var sw = Stopwatch.StartNew();
+
+            var lambda = expression as LambdaExpression;
+
+            if (lambda == null )
+                throw new  ArgumentException();
+
+            var member = lambda.Body as MemberExpression;
+
+            if(member == null)
+                throw new ArgumentException();
+
+            sw.Stop();
+
+            ExpressionEvalTimes.Add(sw.ElapsedTicks);
+
+            return member.Member.Name;
+
+        }</pre>
+Huh? Only ~5 Ticks for evaluation? Looks like we are loosing the most of the time at some other place, time to have a look at the resulting IL Code to see whats going on under the hood. The IL Code looks like this:
+
+<pre>
+IL_0019: ldtoken ExpressionTest.PerformanceTest/TestClass
+IL_001e: call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+IL_0023: ldstr "class"
+IL_0028: call class [System.Core]System.Linq.Expressions.ParameterExpression [System.Core]System.Linq.Expressions.Expression::Parameter(class [mscorlib]System.Type, string)
+IL_002d: stloc.s CS$0$0001
+IL_002f: ldloc.s CS$0$0001
+IL_0031: ldtoken method instance string ExpressionTest.PerformanceTest/TestClass::get_TestMember()
+IL_0036: call class [mscorlib]System.Reflection.MethodBase [mscorlib]System.Reflection.MethodBase::GetMethodFromHandle(valuetype [mscorlib]System.RuntimeMethodHandle)
+IL_003b: castclass [mscorlib]System.Reflection.MethodInfo
+IL_0040: call class [System.Core]System.Linq.Expressions.MemberExpression [System.Core]System.Linq.Expressions.Expression::Property(class [System.Core]System.Linq.Expressions.Expression, class [mscorlib]System.Reflection.MethodInfo)
+IL_0045: ldc.i4.1
+IL_0046: newarr [System.Core]System.Linq.Expressions.ParameterExpression
+IL_004b: stloc.s CS$0$0002
+IL_004d: ldloc.s CS$0$0002
+IL_004f: ldc.i4.0
+IL_0050: ldloc.s CS$0$0001
+IL_0052: stelem.ref
+IL_0053: ldloc.s CS$0$0002
+IL_0055: call class [System.Core]System.Linq.Expressions.Expression`1<!!0> [System.Core]System.Linq.Expressions.Expression::Lambda<class [mscorlib]System.Func`2<class ExpressionTest.PerformanceTest/TestClass, string>>(class [System.Core]System.Linq.Expressions.Expression, class [System.Core]System.Linq.Expressions.ParameterExpression[])
+IL_005a: call string ExpressionTest.PerformanceTest::Test<class ExpressionTest.PerformanceTest/TestClass, string>(class [System.Core]System.Linq.Expressions.Expression`1<class [mscorlib]System.Func`2<!!0, !!1>>)
+IL_005f: pop
+</pre>
+
+As you can see some reflection is involved to create the expression. And as we know Reflection is slow, the metadate lookup take a lot of time and it is done everytime we call the method that takes a expression as parameter. And it is done twice, once for looking up the type of the expression and the second time to get the member that we express with the expression.
+
+Ok now we know what the theoretical overhead is, but what does that mean in the real world? Is it really significant?
+
+Lets do some testing that is closer to the real world. I created a simple WPF application that compares classic propertychange notification with the one that uses expressions. A simple base view model to handle the expression stuff:
+
+&lt;insert code&gt;
+
+and then a test view model with the specific implementation. One property with expression evaluation and one with a classic string based event:
+
+&lt;insert code&gt;
+
+And a simple WPF windows where I bound both of the properties:
+
+&lt;insert XAML&gt;
+
+it looks like this:
+
+&lt;screenshot&gt;
+
+I compared the time it took to update the property a thausand times on each of them:
+
+&lt;result table&gt;

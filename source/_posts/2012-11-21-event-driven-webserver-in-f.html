@@ -1,0 +1,163 @@
+---
+layout: post
+title: event driven webserver with F#
+tags:
+- .Net
+- English
+- fsharp
+- functional programming
+- HTTP
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+  _jd_tweet_this: 'yes'
+  _wp_jd_target: http://www.logv.ws/228
+  _wp_jd_goo: http://goo.gl/AZo4P
+  _jd_wp_twitter: ! 'a:2:{i:0;s:58:"New post: event driven webserver in F# http://goo.gl/AZo4P";i:1;s:63:"Post
+    Edited: event driven webserver with F# http://goo.gl/AZo4P";}'
+---
+I am always open to experiemt with new stuff, so this time I did something I wanted to do for a long time: play a bit with <strong>F#</strong>. I read some book about it in the past, but never had the chance to really <strong>do</strong> something with it. I was always fascinated by the expressiv code that you are able to create with it. Since my current spare time poject is using a webserver I thought it would be a nice idea to implement some stuff for it with F#.
+
+I am now rewriting the hole server component of the <a href="http://www.logv.ws/zugmonitor-app">trainmonitor</a> in F# to get a feeling for it. Here is the first part of code I wrote that is nothing more that a wrapper around the <a href="http://msdn.microsoft.com/en-us/library/System.Net.HttpListener.aspx">HttpListener</a> of the .Net framework. I have written similar stuff in C# to get a async event based <a href="https://github.com/coolya/Simple_Http">server</a> for C#, but what I alway felt ugly about was the way the controlflow was distibuted all over the place. Wouldn't it be nice to just write code like this:
+
+
+
+<pre><code>server.Get |&gt;  Observable.add greeting
+</code></pre>
+
+Which simply replies "hello world" to any get request?
+
+Ok this is a little trick since "greeting" is a function that does the hard work but even if I write it more verbose is looks like this:
+
+
+
+<pre><code>server.Get |&gt;  Observable.add (fun(ctx) -&gt; response ctx |&gt; write "hello world" |&gt; close)
+</code></pre>
+
+Still quite nice? And even if you don't know much about the language or how the methods are implemented you can read whats going on.
+
+It observes the servers "Get" event then it extracts the response, writes "hello world" and closes the response. Ok now how it works?
+
+Lets have a look at the hole code:
+
+
+
+<pre><code>open logv.http
+[&lt;EntryPoint&gt;]
+let main argv =     
+    let server = new Server("localhost", 13337)
+
+    server.Start()
+
+    server.Get |&gt;  Observable.add (fun(ctx) -&gt; response ctx |&gt; write "hello world" |&gt; close)
+    System.Console.ReadLine() |&gt; ignore
+    server.Stop()
+</code></pre>
+
+The magic seems to happen in the logv.http module. This is a module written by me that offers some methods and a server class to interact with the HttpListener of the framework in a more sophisticated way. Due to the nature of F# and its lightwight syntax it offer sime kind of mirco domain specific language to work with. E.g. the "response" keyword is a function for real that extracts the response from a HttpListenerContext and the write function writes a string to such a response combined together it looks like they would be part of the language.
+
+If you are interested in the hole code you can find it a the end of this post. Since I just started porting the code I will keep posting my experience in a small series of blog posts in the near future.
+
+
+
+<pre><code>namespace logv 
+     module http =
+        open System.Net
+
+        /// &lt;summary&gt;Extracts the response from HttpListenerContext&lt;/summary&gt;
+        /// &lt;param name="ctx"&gt;The HttpListenerContext to extract the response from&lt;/param&gt;
+        ///&lt;returns&gt;The HttpListenerResponse from the Context&lt;/returns&gt;
+        let response (ctx : HttpListenerContext) = ctx.Response
+        /// &lt;summary&gt;Extracts the reqeust from HttpListenerContext&lt;/summary&gt;
+        /// &lt;param name="ctx"&gt;The HttpListenerContext to extract the request from&lt;/param&gt;
+        ///&lt;returns&gt;The HttpListenerRequest from the Context&lt;/returns&gt;
+        let request (ctx : HttpListenerContext) = ctx.Request
+        let body (req : HttpListenerRequest) = async {
+                let decode b = req.ContentEncoding.GetString(b)
+
+                let stream = req.InputStream
+                let! bytes = stream.AsyncRead((int)stream.Length)
+                return decode bytes
+            }
+
+
+
+        let writeCode501 (res : HttpListenerResponse) =
+            res.StatusCode &lt;- 501
+            res
+
+        let write (data : string) (res : HttpListenerResponse) =
+            let bytes = System.Text.Encoding.UTF8.GetBytes(data)
+            let stream = res.OutputStream
+            stream.Write(bytes, 0 , bytes.Length)
+            res
+
+        let requestUrl (ctx :HttpListenerContext) = ctx.Request.RawUrl
+        let endsWith(pattern : string) (target : string) = target.EndsWith(pattern)
+        let startsWith(pattern : string) (target : string) = target.StartsWith(pattern)
+        let contains (pattern : string) (target : string)  = target.Contains(pattern)
+        let matches (pattern : string) (target : string) = System.Text.RegularExpressions.Regex.IsMatch(target, pattern)
+
+
+        let close (res : HttpListenerResponse) = res.Close()
+
+        type Server(host : string, port : int) = class
+            let cts = new System.Threading.CancellationTokenSource()
+            let listener = new HttpListener()
+            let getEvent = new Event&lt;_&gt;()
+            let postEvent = new Event&lt;_&gt;()
+            let putEvent = new Event&lt;_&gt;()
+            let deleteEvent = new Event&lt;_&gt;()
+            let patchEvent = new Event&lt;_&gt;()
+
+            let handleContext(ctx :HttpListenerContext) =
+                match ctx.Request.HttpMethod with
+                | "GET" -&gt; getEvent.Trigger(ctx)
+                | "POST" -&gt; postEvent.Trigger(ctx)
+                | "PUT" -&gt; putEvent.Trigger(ctx)
+                | "DELETE" -&gt; deleteEvent.Trigger(ctx)
+                | "PATCH" -&gt; patchEvent.Trigger(ctx)
+                | _ -&gt; response ctx |&gt; writeCode501 |&gt; close
+
+            let mailbox = MailboxProcessor.Start(fun inbox -&gt;
+                let loop =
+                    async {
+                    while true do
+                        let! ctx = inbox.Receive()
+                        handleContext ctx                        
+                    }
+                loop
+                )
+            let rec requestLoop(token : System.Threading.CancellationToken) = async {
+                let! context = Async.FromBeginEnd(listener.BeginGetContext, listener.EndGetContext)
+                mailbox.Post(context)
+                if token.IsCancellationRequested = false then
+                    return! requestLoop(token)
+             }                
+
+
+            member val Host = host with get
+            member val Port = port with get
+            ///Starts the webserver
+            member this.Start() = 
+                listener.Prefixes.Add("http://" + host + ":" + port.ToString() + "/")
+                listener.Start()
+                Async.Start(requestLoop(cts.Token))
+            ///Stops the webserver                    
+            member x.Stop() =
+                cts.Cancel()
+                listener.Stop()
+            ///Event for handling a GET request
+            member x.Get = getEvent.Publish
+            ///Event for handling a POST request
+            member x.Post = postEvent.Publish
+            ///Event for handling a PUT request
+            member x.Put = putEvent.Publish
+            ///Event for handling a DELETE request
+            member x.Delete = deleteEvent.Publish
+            ///Event for handling a PATCH request
+            member x.Patch = patchEvent.Publish
+        end
+</code></pre>

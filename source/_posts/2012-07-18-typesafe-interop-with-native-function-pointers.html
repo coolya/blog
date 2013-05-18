@@ -1,0 +1,88 @@
+---
+layout: post
+title: Typesafe interop with native function pointers
+tags:
+- .Net
+- C#
+- delegate
+- native
+- RuntimeType
+- TypeBuilder
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+---
+The current project I did for a customer faced me with tons of legancy code which was written in C++ years back. This code is supposed to die at some point, but due some requirements the code needed to interact with some .Net / C# with COM Interop.
+The code uses a lot of function pointers passed to the callee to supply callbacks for logging and user notification. Exposing events for interaction from .Net via COM to the C++ code would have caused a major rewrite of the code, so we decided to stick with the callback pattern.
+Directly using the <a href="http://msdn.microsoft.com/de-de/library/system.runtime.interopservices.marshal.getdelegateforfunctionpointer.aspx" target="_blank"><em>Marshal.GetDelegateForFunctionPointer</em></a> stuff would have been possible but sadly the function does not accept generic delegate classes like <a href="http://msdn.microsoft.com/de-de/library/018hxwa8.aspx" target="_blank"><em>Action&lt;T&gt;</em></a> which would have caused everyone using those functions would create his own delegate types. That was point where I decided to build a factory that creates actions from function pointers.
+
+ Looking at <a href="http://msdn.microsoft.com/de-de/library/system.linq.expressions.expression.getdelegatetype.aspx" target="_blank"><em>Expression.GetDelegateType</em> </a>might look promising at first but it will return <em>Action&lt;T&gt;</em> if possible and only create a custom delegate type if it doesn't find any matching <em>Action&lt;T&gt;</em>. So we are forced to create our own delegates at runtime.
+
+I built a static class called <em>NativeCallbackFactory</em>, that<em> </em>has a simple type constructor which builds <a href="http://msdn.microsoft.com/de-de/library/system.reflection.emit.modulebuilder.aspx" target="_blank"><em>ModuleBuilder</em> </a>for later code emititation.
+<pre>private static readonly ModuleBuilder CallbackModuleBuilder;
+
+static NativeCallbackFactory()
+{
+
+            CallbackModuleBuilder = AppDomain.CurrentDomain.DefineDynamicAssembly(new AssemblyName("NativeCallbacks"),
+                                                                           AssemblyBuilderAccess.Run)
+                                                                           .DefineDynamicModule("Delegates", false);
+}</pre>
+ Now I need a helper function that created the delegate type I need:
+<pre>public static Type CreateCallbackType(params Type[] parameters)
+    {
+        Type returnType = typeof(void);
+        TypeBuilder typeBuilder = GetBuilder("Delegate" + Guid.NewGuid());
+        typeBuilder.DefineConstructor(MethodAttributes.FamANDAssem | MethodAttributes.Family | MethodAttributes.HideBySig | MethodAttributes.RTSpecialName,
+                                        CallingConventions.Standard,
+                                        DelegateCtorSignature)
+                .SetImplementationFlags(MethodImplAttributes.CodeTypeMask);
+        typeBuilder.DefineMethod("Invoke", MethodAttributes.FamANDAssem | MethodAttributes.Family | MethodAttributes.Virtual | MethodAttributes.HideBySig | MethodAttributes.VtableLayoutMask,
+                                    returnType, parameters)
+                .SetImplementationFlags(MethodImplAttributes.CodeTypeMask);
+
+        var attributeType = typeof(UnmanagedFunctionPointerAttribute);
+        var builder = new CustomAttributeBuilder(attributeType.GetConstructor(new[] { typeof(CallingConvention) }),
+                                                    new object[] { CallingConvention.StdCall },
+                                                    new[] { attributeType.GetField("CharSet") },
+                                                    new object[] { CharSet.Ansi });
+        typeBuilder.SetCustomAttribute(builder);
+        return typeBuilder.CreateType();
+    }</pre>
+Lets look at all the code in a little more detail to see what I am actually doing.
+<pre>Type returnType = typeof(void);
+TypeBuilder typeBuilder = GetBuilder("Delegate" + Guid.NewGuid());</pre>
+ I created a <a href="http://msdn.microsoft.com/de-de/library/system.reflection.emit.typebuilder.aspx" target="_blank"><em>TypeBuilder</em> </a>(more on that in little while), in my case the return type is always void, thats why it is hard coded in here, but you can specify your own if you need. Currently the name of the delegate type I am building is a random name and different for each delegate that is created. If you want to, you can implement your own naming here, to e.g. allow caching or get not that obfuscated names.
+
+The <em>TypeBuilder</em> creation is straightforward:
+<pre>private static TypeBuilder GetBuilder(string name)
+{
+    var stringBuilder = new StringBuilder(name);
+    stringBuilder.Append("$");
+    //remove illegal chars from name
+    stringBuilder.Replace('+', '_').Replace('[', '_').Replace(']', '_').Replace('*', '_').Replace('&amp;', '_').Replace(',', '_').Replace('\\', '_');
+    name = stringBuilder.ToString();
+    return CallbackModuleBuilder.DefineType(name, TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.AutoClass, typeof(MulticastDelegate));
+}</pre>
+ It simply removes illegal chars from the name of the delegate and builds a new type using the <em>ModuleBuilder</em> I defined in the type constructor. The new type is a public type that is sealed, since I don't want to inherit from it any further and it allows the CLR to apply some optimizations.
+
+Once I have the <em>TypeBuilder</em> I create my own constructor. The <em>DelegateCtorSignature</em> is a static variable that holds the default delegate constructor signature.
+<pre>typeBuilder.DefineConstructor(MethodAttributes.FamANDAssem | MethodAttributes.Family | MethodAttributes.HideBySig | MethodAttributes.RTSpecialName,
+                                    CallingConventions.Standard,
+                                    DelegateCtorSignature)
+                                    .SetImplementationFlags(MethodImplAttributes.CodeTypeMask);</pre>
+After the constructor I need a <em>Invoke</em> method to invoke the delegate. This method is of the returntype of out native method, in this case void and has the parameters of the native method.
+<pre>typeBuilder.DefineMethod("Invoke", MethodAttributes.FamANDAssem | MethodAttributes.Family | MethodAttributes.Virtual | MethodAttributes.HideBySig | MethodAttributes.VtableLayoutMask, 
+returnType, parameters).SetImplementationFlags(MethodImplAttributes.CodeTypeMask);</pre>
+Now I would have a fully functional <a href="http://msdn.microsoft.com/de-de/library/system.delegate.aspx" target="_blank"><em>delegate</em> </a>class but it would be missing some nice stuff the runtime is offering us, string conversion and calling conventions. This is controlled by attributes which you apply to the delegate the <a href="http://msdn.microsoft.com/de-de/library/system.runtime.interopservices.unmanagedfunctionpointerattribute.aspx" target="_blank"><em>UnmanagedFunctionPointerAttribute</em></a>. So I apply this attribute to the new type:
+<pre>var attributeType = typeof(UnmanagedFunctionPointerAttribute);
+var builder = new CustomAttributeBuilder(attributeType.GetConstructor(new[] { typeof(CallingConvention) }), 
+                                               new object[] { CallingConvention.StdCall },
+                                                new[]{ attributeType.GetField("CharSet")},
+                                                new object[] { CharSet.Ansi });
+typeBuilder.SetCustomAttribute(builder);</pre>
+ In my case the strings are passed as <a href="http://msdn.microsoft.com/en-us/library/windows/desktop/aa383751(v=vs.85).aspx#LPTSTR" target="_blank"><em>LPTSTR</em> </a>which is the Ansi Charset on the CLR you can use Unicode if you want by changing it. Finally I need to tell the <em>TypeBuilder</em> to build the type:
+<pre>return typeBuilder.CreateType();</pre>
+ I have hooked everything up in a static class that provides these functionality with generic methods. This makes it easy to create type safe delegates from function pointer and you can easily extend it. E.g. you can add value converter to the delegates if you need to. If you have to create a lot of delegates at runtime with the same signature you might want to implement some caching since the code emit at runtime is quite expensive. You can download the complete  source code <a href="http://www.logv.ws/wp-content/uploads/2012/07/nativesample.txt">here</a>. It is free to use and comes with no license restrictions. Have fun with it.

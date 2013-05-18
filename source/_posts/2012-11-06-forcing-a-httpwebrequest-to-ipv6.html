@@ -1,0 +1,35 @@
+---
+layout: post
+title: Forcing a HttpWebRequest to IPv6
+tags:
+- .Net
+- .NET
+- Allgemein
+- C#
+- delegates
+- English
+- HTTP
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+  _jd_tweet_this: 'yes'
+  _wp_jd_target: http://www.logv.ws/159
+  _wp_jd_goo: http://goo.gl/0Htp5
+  _jd_wp_twitter: ! 'a:1:{i:0;s:62:"New post: Forcing a HttpWebRequest to IPv6 http://goo.gl/0Htp5";}'
+---
+In my current project I have a use case where I want to connect to a HTTP server via IPv6, but the client and server also have IPv4 connectivity. Which leads to the problem that the .Net framework chooses the IPv4 address over the IPv6 address. I could enable round robin in the <a href="http://msdn.microsoft.com/en-US/library/vstudio/zsk61s76(v=vs.90).aspx" target="_blank">ServicePointManger </a>config, but that would only cycle through all the addresses returned by the DNS request.
+
+So I need a another way to solve the problem. I stumbled up on a post on <a href="http://stackoverflow.com/questions/3345387/how-to-change-originating-ip-in-httpwebrequest" target="_blank">stackoverflow </a>about how to control the address from which the connection is established. Starting from there I had a look at the framework code which establishes the connection to the ServicePoint which is located in the System.Net.ServicePoint class method "ConnectSocketInternal" this method loops through all the IP Addresses returned by the DNS subsystem. The code skips to the next ip if something goes wrong while connecting. As the post on stackoverflow points out we can add our own delegate to the <a href="http://msdn.microsoft.com/en-us/library/system.net.servicepoint.aspx" target="_blank">ServicePoint </a>to intercept this connection request. Enforcing IPv6 is quite easy to do:
+<pre>var req = HttpWebRequest.Create("http://google.com") as HttpWebRequest;
+
+req.ServicePoint.BindIPEndPointDelegate = (servicePount, remoteEndPoint, retryCount) =>
+{
+	if (remoteEndPoint.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+	{
+		return new IPEndPoint(IPAddress.IPv6Any, 0);
+	}
+	throw new InvalidOperationException("no IPv6 address");
+};</pre>
+This code simply throws if a IPv4 address is passed to connect and the ServicePoint class will try the next address. But be aware it only works in use casses where both, the server and the client, are reachable via IPv6 and the server provides a AAAA record for the hostname.

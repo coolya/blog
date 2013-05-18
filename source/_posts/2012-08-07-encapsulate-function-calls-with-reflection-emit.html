@@ -1,0 +1,198 @@
+---
+layout: post
+title: Encapsulate function calls with Reflection.Emit
+tags:
+- .Net
+- .NET
+- C#
+- CSharp
+- delegates
+- emit
+- English
+- Expression
+- reflection
+- Reflection.Emit
+- TypeBuilder
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+  _jd_tweet_this: 'yes'
+  _jd_twitter: ''
+  _wp_jd_clig: ''
+  _wp_jd_bitly: ''
+  _wp_jd_wp: http://www.logv.ws/?p=63
+  _wp_jd_yourls: ''
+  _wp_jd_url: ''
+  _wp_jd_target: ''
+  _jd_wp_twitter: ! 'a:2:{i:0;s:82:"New post: Encapsulate function calls with Reflection.Emit
+    http://www.logv.ws/?p=63";i:1;s:85:"Post Edited: Encapsulate function calls with
+    Reflection.Emit http://www.logv.ws/?p=63";}'
+---
+My current spare time project <a href="http://www.logv.ws/51" title="Yet another AOP framework">YAAF </a>had some requirement that I need to intercept calls to a function. The interceptor then decides if the function gets called or not. But I wanted to parameters to be encapsulated, so the interceptor does not have access to them. The easiest way to do this was a simple delegate that will be passed to the interceptor and represents the complete context needed to call the callee when the interceptor decides to do so. But how to do it?
+With lambda expressions that is easy so I created a sample like this:
+<pre>    class TestClass
+    {
+      private ITest _instance;
+      public Action Foo(string blah, string blub)
+      {
+          Action bar = () =>; _instance.Foobar(blah, blub);
+          return bar;
+      }
+    }</pre>
+This does exactly what I want! It creates a delegate the encapsulates the complete call. In order to be able to create the same with Reflection.Emit I had a look at the resulting IL code. And I was a little bit surprised but look yourself what the compiler generates.
+<pre>.method public hidebysig
+instance class [mscorlib]System.Action Foo (
+string blah,
+string blub
+) cil managed
+{
+// Method begins at RVA 0x20b4
+// Code size 47 (0x2f)
+.maxstack 3
+.locals init (
+[0] class [mscorlib]System.Action bar,
+[1] class AttributeTest.TestClass/'<>c__DisplayClass1' 'CS$<>8__locals2',
+[2] class [mscorlib]System.Action CS$1$0000
+)
+IL_0000: newobj instance void AttributeTest.TestClass/'<>c__DisplayClass1'::.ctor()
+IL_0005: stloc.1
+IL_0006: ldloc.1
+IL_0007: ldarg.1
+IL_0008: stfld string AttributeTest.TestClass/'<>c__DisplayClass1'::blah
+IL_000d: ldloc.1
+IL_000e: ldarg.2
+IL_000f: stfld string AttributeTest.TestClass/'<>c__DisplayClass1'::blub
+IL_0014: ldloc.1
+IL_0015: ldarg.0
+IL_0016: stfld class AttributeTest.TestClass AttributeTest.TestClass/'<>c__DisplayClass1'::'<>4__this'
+IL_001b: nop
+IL_001c: ldloc.1
+IL_001d: ldftn instance void AttributeTest.TestClass/'<>c__DisplayClass1'::'<Foo>b__0'()
+IL_0023: newobj instance void [mscorlib]System.Action::.ctor(object, native int)
+IL_0028: stloc.0
+IL_0029: ldloc.0
+IL_002a: stloc.2
+IL_002b: br.s IL_002d
+IL_002d: ldloc.2
+IL_002e: ret
+}</pre>
+Ok this looks a bit different from what expected and what's this strange class <em>/'<>c__DisplayClass1'</em>. Lets have a look at that class too:
+<pre>[CompilerGenerated]
+private sealed class <>c__DisplayClass1
+{
+public TestClass <>4__this;
+public string blah;
+public string blub;
+public <>c__DisplayClass1()
+{
+base..ctor();
+}
+public void <Foo>b__0()
+{
+this.<>4__this._instance.Foobar(this.blah, this.blub);
+}
+}</pre>
+Looks like the compiler created a wrapper class for this delegate call. The class holds all the fields needed to perform the call and a parameterless void that contains the code I wrote in the expression. The compiler than replaced my code with code that at first creates a instance of the wrapper, then fills all the parameters according to the call I want to be encapsulated and then creates a delegate that points to the created instances method that represents the expression.
+Ok lets try this at home ;-)
+I created a little console project that looks like this:
+<pre>static void Main(string[] args)
+{
+    var instance = new Test();
+    var builder = new DelegateBuilder();
+    var deleg = builder.GetDelegate(instance, "TestTheBest", "Test call");
+    deleg();
+}</pre>
+It creates an instance of <em>Test </em>and <em>DelegateBuilder </em>and then tells the DelegateBuilder instance to build a delegate for the function <em>TestTheBest </em>with the parameter <em>"Test call"</em>. This delegate holds all the needed information to perform the operation just like the compiler did, but how to do this at runtime? Lets have a closer look to the builders <em>GetDelegateMethod</em>:
+<pre>
+public  Action GetDelegate<T>(T instance, string methodName, params object[] param)
+{
+    var toInvoke = typeof(T).GetMethod(methodName);
+    var wrapperType = this._moduleBuilder.DefineType(toInvoke.Name + "InvokeWrapper", TypeAttributes.AutoClass | TypeAttributes.Sealed | TypeAttributes.Public);
+    var that = wrapperType.DefineField("_that", toInvoke.DeclaringType, FieldAttributes.Public);
+    var fields = new Dictionary<string, FieldBuilder>();
+    var parameters = toInvoke.GetParameters();
+    foreach (ParameterInfo parameter in parameters)
+    {
+       var field = wrapperType.DefineField(parameter.Name, parameter.ParameterType, FieldAttributes.Public);
+       fields.Add(parameter.Name, field);
+    }
+    var method = wrapperType.DefineMethod("Run", MethodAttributes.Public);
+    var ilMethod = method.GetILGenerator();
+    ilMethod.Emit(OpCodes.Ldarg_0);
+    ilMethod.Emit(OpCodes.Ldfld, that);
+    foreach (var parameter in parameters)
+    {
+       ilMethod.Emit(OpCodes.Ldarg_0);
+       ilMethod.Emit(OpCodes.Ldfld, fields[parameter.Name]);
+    }
+    ilMethod.Emit(OpCodes.Callvirt, toInvoke);
+    ilMethod.Emit(OpCodes.Ret);
+    var ctor = wrapperType.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard,
+       new[] { toInvoke.DeclaringType }.Concat(param.Select(i => i.GetType())).ToArray());
+    var ilConstructor = ctor.GetILGenerator();
+    ilConstructor.Emit(OpCodes.Ldarg_0);
+    ilConstructor.Emit(OpCodes.Ldarg_1);
+    ilConstructor.Emit(OpCodes.Stfld, that);
+    for (int i = 0; i < parameters.Length; i++)
+    {
+       ilConstructor.Emit(OpCodes.Ldarg_0);
+       ilConstructor.Emit(OpCodes.Ldarg, i + 2); //1 is that
+       ilConstructor.Emit(OpCodes.Stfld, fields[parameters[i].Name]);
+    }
+    ilConstructor.Emit(OpCodes.Ret);
+    var type = wrapperType.CreateType();
+    var wrapperInstance = type.GetConstructor(new[] { toInvoke.DeclaringType }.Concat(param.Select(i => i.GetType())).ToArray())
+       .Invoke(new object[] {instance}.Concat(param).ToArray());
+    return (Action)Delegate.CreateDelegate(typeof(Action), wrapperInstance, "Run");
+}</pre>
+This method uses Reflection.Emit to create a new class and a delegate just like the compiler did. At first a new Type is declared that holds a reference to instance on which the delegate should invoke the function
+<pre>var toInvoke = typeof(T).GetMethod(methodName);
+var wrapperType = this._moduleBuilder.DefineType(toInvoke.Name + "InvokeWrapper", TypeAttributes.AutoClass | TypeAttributes.Sealed | TypeAttributes.Public);
+var that = wrapperType.DefineField("_that", toInvoke.DeclaringType, FieldAttributes.Public);</pre>
+The filed to the instance is named 'that' since I found the '_this' of the compiler a bit missleading.
+Then it adds fields for all parameters of the function that should be called to the new type:
+<pre>var fields = new Dictionary<string, FieldBuilder>();
+var parameters = toInvoke.GetParameters();
+foreach (ParameterInfo parameter in parameters)
+{
+    var field = wrapperType.DefineField(parameter.Name, parameter.ParameterType, FieldAttributes.Public);
+    fields.Add(parameter.Name, field); 
+}</pre>
+Once I have the fields to store parameters I add a 'Run" method that has no parameters and is the method that gets invoked by the delegate:
+<pre>var method = wrapperType.DefineMethod("Run", MethodAttributes.Public);
+var ilMethod = method.GetILGenerator();
+ilMethod.Emit(OpCodes.Ldarg_0);
+ilMethod.Emit(OpCodes.Ldfld, that);
+foreach (var parameter in parameters)
+{
+    ilMethod.Emit(OpCodes.Ldarg_0);
+    ilMethod.Emit(OpCodes.Ldfld, fields[parameter.Name]);
+}
+ilMethod.Emit(OpCodes.Callvirt, toInvoke);
+ilMethod.Emit(OpCodes.Ret);</pre>
+This function consists of code that loads the 'that' instance on the stack and then places all the parameters for the method on the stack. After that it calls the target method on the 'that' instance.
+Now that I have a method I can invoke, I still need a constructor to create an instance and fill the fields.
+<pre>var ctor = wrapperType.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard,
+    new[] { toInvoke.DeclaringType }.Concat(param.Select(i => i.GetType())).ToArray());
+var ilConstructor = ctor.GetILGenerator();
+ilConstructor.Emit(OpCodes.Ldarg_0);
+ilConstructor.Emit(OpCodes.Ldarg_1);
+ilConstructor.Emit(OpCodes.Stfld, that);
+for (int i = 0; i < parameters.Length; i++)
+{
+    ilConstructor.Emit(OpCodes.Ldarg_0);
+    ilConstructor.Emit(OpCodes.Ldarg, i + 2); //1 is that
+    ilConstructor.Emit(OpCodes.Stfld, fields[parameters[i].Name]);
+}
+ilConstructor.Emit(OpCodes.Ret);</pre>
+The constructor signature startet with the that parameter, which is of the type óf the instance the target method should be invoked, and is followed by the function parameters. The Body of the constructor then stores its parameters in the conresponding fields. After that I am done with creating the new type and so I build it:
+<pre>var type = wrapperType.CreateType();</pre>
+And now I need a instance of the new type to create a delegate that points to its 'Run' Method.
+<pre>var wrapperInstance = type.GetConstructor(new[] { toInvoke.DeclaringType }.Concat(param.Select(i => i.GetType())).ToArray())
+    .Invoke(new object[] {instance}.Concat(param).ToArray());</pre>
+The instance is created with simple reflection by invoking the constuctor with all the parameters. And finally the delegate is created:
+<pre>return (Action)Delegate.CreateDelegate(typeof(Action), wrapperInstance, "Run");</pre>
+Now I have a delegate that points to the newly created instances 'Run' method and can be executed without any parameter.
+Currently this code is pretty damn ineffective and will perform pretty bad compared to the compiler generated version. But this just a sample to show what is possible. If you would like to use this in production you should optimize it further, but also there won't be much benefit about a compile time version, so why am I doing this? Because I can ;-) , but also to use this in my AOP framework where I will need such a functionality. Even if you aren't working at the edge of the CLR this should provide you a nice view into what the compiler does behind the scenes and it is alway good to know what your code really does. This does not mean you should count on any of these implementation details on the compiler side, it might occur that Microsoft changes the behaviour.

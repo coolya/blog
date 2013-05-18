@@ -1,0 +1,117 @@
+---
+layout: post
+title: Get the size of an object graph at runtime
+tags:
+- .Net
+- .NET
+- C#
+- clr
+- clr internals
+- English
+- heap
+- reflection
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+  _jd_tweet_this: 'yes'
+  _jd_wp_twitter: ! 'a:2:{i:0;s:78:"New post: Get the size of an object graph at runtime
+    http://www.logv.ws/?p=119";i:1;s:81:"Post Edited: Get the size of an object graph
+    at runtime http://www.logv.ws/?p=119";}'
+  _wp_jd_target: ''
+  _wp_jd_wp: http://www.logv.ws/?p=119
+  _wpt_failed: ! 'a:5:{s:6:"author";s:0:"";s:8:"sentence";s:81:"Post Edited: Get the
+    size of an object graph at runtime http://www.logv.ws/?p=119";s:5:"error";s:71:"This
+    tweet is identical to another Tweet recently sent to this account.";s:4:"code";s:3:"403";s:9:"timestamp";s:10:"1346933045";}'
+---
+<strong>At first I have to put a big fat disclaimer up in here: what I am discribing below is totally undocumented and unsupported by microsoft. It is based on findings while I was investigating issues with the MemoryCache in the System.Runtime.Caching assembly. I would not recommend any useage of this in a production software. If you decide to do so that is up to you, but there is no support for this from anyone and it is likly to break in the future, since it is based on internals of the CLR.</strong>
+Ok lets start. All started by nailing down some issue with the MemoryCache that was allocating far more memory than the specified limits. It uses a CacheMemoryMonitor internally to monitor the amount of memory it consumes. And if it reaches its limit it will try to drop elements from the cache. To get that number it has a GetCurrentPressure method, which itself uses a class called SRef this class is internal to the assembly and has some interesting member: ApproximateSize. So I took a closer look at this class. It's constructor takes an object and then creates an instance of a type loaded into a static field. The type is called System.SizedReference, looks we have something interesting. The type is implemented in the mscorlib and marked as internal, thats the reason why it is loaded via reflection .
+The class looks like this:
+<pre> internal class SizedReference : IDisposable
+{
+ internal volatile IntPtr _handle;
+ public object Target
+ {
+  [SecuritySafeCritical]
+  get
+  {
+  }
+ }
+ public long ApproximateSize
+ {
+  [SecuritySafeCritical]
+  get
+  {
+  }
+ }
+ [SecuritySafeCritical]
+ public SizedReference(object target)
+ {
+ }
+ protected override void Finalize()
+ {
+ }
+ public void Dispose()
+ {
+ }
+ [SecurityCritical]
+ [MethodImpl(MethodImplOptions.InternalCall)]
+ private static extern IntPtr CreateSizedRef(object o);
+ [SecurityCritical]
+ [MethodImpl(MethodImplOptions.InternalCall)]
+ private static extern void FreeSizedRef(IntPtr h);
+ [SecurityCritical]
+ [MethodImpl(MethodImplOptions.InternalCall)]
+ private static extern object GetTargetOfSizedRef(IntPtr h);
+ [SecurityCritical]
+ [MethodImpl(MethodImplOptions.InternalCall)]
+ private static extern long GetApproximateSizeOfSizedRef(IntPtr h);
+ [SecuritySafeCritical]
+ private void Free()
+ {
+ }
+}</pre>
+I have removed all the implementation code since we don't need it here, as you can see all the interesting code is marked with MethodImplOptions.InternalCall, which means it calles directly into the CLR to obtain the data. Now you might want to look at the SSCLI source from microsoft to find out what's going on under the hood, but this class was not part of the .Net Framework 2.0 so there is no native source of the CLR available for it. But we can try to use this class, just the way the MemoryCache does it. Here is a simple wrapper that creates a instance and exposes the size:
+<pre> class MeteredReference
+       {
+           static Type s_type = Type.GetType("System.SizedReference", true, false);
+           public MeteredReference(object target)
+           {
+               _sizedRef = Activator.CreateInstance(s_type, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.CreateInstance, null, new object[]
+          {
+           target
+          }, null);
+           }
+           public long Size
+           {
+               get
+               {
+                   return (long)s_type.InvokeMember("ApproximateSize", BindingFlags.Instance | BindingFlags.Public | BindingFlags.GetProperty, null, _sizedRef, null, CultureInfo.InvariantCulture);
+               }
+           }
+           public object _sizedRef;
+       }</pre>
+Lets try it:<pre>        static void Main(string[] args)
+       {
+           var ref1 = new MeteredReference("hello world");
+           Console.WriteLine(ref1.Size);
+           Console.ReadKey();
+       }</pre>
+When you run this code you will notice that it prints '0'. So it looks like it would not work. At this point I was about to stop investigating because I thought it would not work, but then I remembered that the code of CacheMemoryMonitor checks if a generation 2 GarbageCollection happened before using the value. Ok lets try to force a collection:
+<pre>var ref1 = new MeteredReference("hello world");
+GC.Collect();
+Console.WriteLine(ref1.Size);
+Console.ReadKey();</pre>
+And there we go, it prints '48'. It looks like it prints the size in bytes. But 48 bytes for a 11 chars string? Weren't chars 16bit / 2 byte on the CLR and it should be 22bytes? Since we called the 'ApproximateSize' I think the CLR internally tries to guess the value and might take the internal structure on the heap like the syncblk and typehandle into account. So the values appears to be larger than the actual value.
+Lets try another one with a real graph like a list.
+<pre> var list = new List<string> {"foo", "bar", "foobar"};
+var ref2 = new MeteredReference(list);</pre>
+Which gave me a 206. 
+Then I tried what happens when I clear the list.
+<pre>Console.WriteLine(ref2.Size);
+list.Clear();
+Console.WriteLine(ref2.Size);</pre>
+This gave me that same value than before I cleared the list. May be another GC run will do the trick. Yep, there we go it seems to work it now prints 104. So it seems that it is using some internal information stores by the GarbageCollector and its value will only be updated if a GC has run.
+You can find the full sample on Github as a <a href="https://gist.github.com/3621884" target="_blank">gist</a>.
+
