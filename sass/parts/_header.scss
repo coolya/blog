@@ -341,6 +341,13 @@ $header-height: 30px;
 					border: 1px solid darken(#55CFF8, 10%);
 				}
 			}
+			&.appnet{
+				background: image-url('social/appnet.png') center no-repeat #55CFF8;
+				border: 1px solid #6f7477;
+				&:hover{
+					border: 1px solid darken(#6f7477, 10%);
+				}
+			}
 			&.github{
 				background: image-url('social/github.png') center no-repeat rgb(175,182,202);
 				border: 1px solid rgb(175,182,202);
