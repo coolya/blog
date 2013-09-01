@@ -1,0 +1,17 @@
+---
+layout: post
+title: "moving on"
+date: 2013-08-31 13:41
+comments: true
+author: Kolja Dummann
+categories: 
+- personal 
+- about me
+---
+
+
+As some of you might have noticed there where some recent changes in my professional life.  I am really happy to announce that I am now working for [Itemis](http://itemis.de), the company behind mbeddr, as a team member of the mbeddr team. Markus already [mentioned](http://mbeddr.wordpress.com/2013/08/21/new-team-members/) this on the mbeddr blog. This also implies that I left [BKR Software](http://bkr.de) the company that I was working for before. It was an exiting one and a half year where I meet many interesting people and was able to some exciting projects.  I would like to thank all of my former collages for this time and I wish you all the best. 
+
+Ok but why did I change? Well there were several reasons for that some are private (which I won't talk about here), but the main reason is that I am now able to work full time on modeling projects which was always a pleasure to me. Until now it was more or less my own passion that motivated me to use model driven or DSLish solutions in projects. Beside this mbeddr is MPS based, a platform that I really like and I think pushed projectional editors to a usable level.  On the other hand I am now able to work with [Markus](http://voelter.de) and [Bernd](http://wp.kolbware.de/) who pretty much influenced my professional career, with a lot of papers they have published and talks they gave at various conferences, especially in the domain of modeling and product line engineering.
+
+Stay tuned for further development to the mbeddr arduino project which is now my 20% (yep looking at you Googlers makes me smiles a bit ;-) ) project so I can spent much more time on it. I currently preparing some blog posts and tutorials that should give you some more detailed look inside mebddr and how mebddr helped to make life on embedded hardware easier. 
