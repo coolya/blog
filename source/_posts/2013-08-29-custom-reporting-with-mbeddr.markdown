@@ -11,7 +11,7 @@ categories:
 
 ### Introduction
 
-As some of you might already know I have worked on an Arduino extension for mbeddr. Because such system run headless you can't just use `printf` for displaying messages. These systems usually ship with a serial or USB port which can be used to communicate with the world. There are actually two ways to deal with this, first we could replace the printf backing file handle with a handle that writes to the serial port, or second use mbeddrs own reporting infrastructure to deal with this. The mebddr approach also give us the more flexibility because we could either write messages to the serial port or store critical errors in the EPROM for further investigation. 
+As some of you might already know I have worked on an Arduino extension for mbeddr. Because such system run headless you can't just use `printf` for displaying messages. These systems usually ship with a serial or USB port which can be used to communicate with the world. There are actually two ways to deal with this, first we could replace the printf backing file handle with a handle that writes to the serial port, or second use mbeddrs own reporting infrastructure to deal with this. The mebddr approach also give us  more flexibility because we could either write messages to the serial port or store critical errors in EPROM for further investigation. 
 
 Here I will talk about how to build your own reporting backend into mbeddr, in this case a backend that writes to the serial port.
 
@@ -31,15 +31,15 @@ Messages as the name says define messages. They have a name to reference them, a
 
 #### MessageDefinitionTable
 
-A collection on messages. Any `MessagesDefinition` belongs to a `MessageDefinitionTable`. It acts as a kind of namespace for messages.
+A collection of messages. Any `MessagesDefinition` belongs to a `MessageDefinitionTable`. It acts as a kind of namespace for messages.
 
 #### ReportStatement
 
-The `ReportStatement` is used to report a message. It references to a message and provides the actual values for parameters, if the message defines any. The parameters can be any value matching the type of definition, for instance a local variable or a value obtained from an external sensor.  The statement also provides so called `checks` which is a guard only. If it evaluates to `true` the actual message will be reported.
+The `ReportStatement` is used to report a message. It references a message and provides the actual values for parameters, if the message defines any. The parameters can be any value matching the type of definition, for instance a local variable or a value obtained from an external sensor.  The statement also provides so called `checks` which is a guard. Only if it evaluates to `true` the actual message will be reported.
 
 #### ReportingStrategy
 
-The `ReportingStrategy` is used inside the build configuration to specify what kind of reporting the project uses. In mbeddr there already to predefined reporting strategies: printf and nothing. As the name suggest the first one uses simple `printf` statements to report a message and the later does nothing with them.
+The `ReportingStrategy` is used inside the build configuration to specify what kind of reporting the project uses. In mbeddr there are already predefined reporting strategies: printf and nothing. As the name suggest the first one uses simple `printf` statements to report a message and the later does nothing with them.
 
 ### Implementation
 
