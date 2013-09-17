@@ -92,7 +92,7 @@ The property macros for the names are quite simple, they just generate a unique 
 
 {% img /images/arduino-reporting/9.png 750 'message text'  %}
 
-Now that we have the texts and the counters generated we can start with the part that emits the code to post the message to the serial port. I our case we have a library that does all the details. All we need to do is call a function with a `char*` as a argument. The lib is added via the make file an header file is called `serial.h`.  So the next thing to do is reducing the `ReportStatements`, but in order to keep the generator clean we implemented two different reduction rules one for a message with parameters and one for messages without. Later you will see why. Here is what the generator for messages without parameters looks like:
+Now that we have the texts and the counters generated we can start with the part that emits the code to post the message to the serial port. I our case we have a library that does all the details. All we need to do is call a function with a `char*` as a argument. The lib is added via the make file and the header file is called `serial.h`.  So the next thing to do is reducing the `ReportStatements`, but in order to keep the generator clean we implemented two different reduction rules one for a message with parameters and one for messages without. Later you will see why. Here is what the generator for messages without parameters looks like:
 
 {% img /images/arduino-reporting/10.png 750 'report reduction'  %}
 
