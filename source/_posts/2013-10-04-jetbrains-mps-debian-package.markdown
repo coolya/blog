@@ -10,7 +10,7 @@ Good news for all debian and ubuntu users using the [Meta Programming System](ht
 In order to use it open a root shell and run the following commands. Those will add the repository and import my public gpg key:
 
 {% codeblock lang:sh %}
-echo 'deb http://dl.logv.ws/repository ./' >> /etc/apt/source.list
+echo 'deb http://dl.logv.ws/repository ./' >> /etc/apt/sources.list
 wget http://logv.ws/files/kdummann.asc
 apt-key add kdummann.asc
 apt-get update
@@ -27,3 +27,6 @@ The same also applies to mbeddr:
 {% codeblock lang:sh %}
 apt-get install mbeddr
 {% endcodeblock %}
+
+**Update**:
+Currently the mbeddr package has optional dependencies for example the `nusmv` package which aren't available on many distributions, we will provides theses packages in the same repository shortly. This will allow us to not depend on any distribution update schedule when we need new versions of this tools. Sadly we will not be able to distribute `yices` which is used by mbeddr for analyses because their license doesn't allow is to redistribute their software. You will still have to accept their license manually and install it by hand. But I will post a tutorial how to do that on the [mbeddr blog](http://mbeddr.wordpress.com/blog).
