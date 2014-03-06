@@ -9,7 +9,7 @@ categories:
 - talks
 ---
 
-On Sunday I have given a about mbeddr and how we build it at [FODESM](http://fosdem.org).
+On Sunday I have given a talk about mbeddr and how we build it at [FODESM](http://fosdem.org).
 You can find the slides at [speakerdeck](https://speakerdeck.com/coolya/what-if-we-could-change-programming-languages)
 where you can also download them as a PDF from there. And [here](/download/mbeddr.fosdem.zip) you can find the original Keynote 6 files.
 
