@@ -15,7 +15,7 @@ One of the features I love the most is implicit strong typed variables, expresse
 as type in a variable declarations. Due to the extensible nature of MPS it is quite easy to extend existing
 languages. So I decided to build this feature in MPS for Java.
 
-Now you might thing this ridiculously crazy since it is hard to change an existing language. But in MPS
+Now you might think this ridiculously crazy since it is hard to change an existing language. But in MPS
 everything is about modularization, extensibility and composition of languages. And It ships with a
 Java implementation called `baselanguage` out of the box. For me it took 30 minutes of work to build
 this extension. Though I have a lot of experience with MPS and a good knowledge of baselanguage
